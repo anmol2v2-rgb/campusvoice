@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isSuperAdmin() {
+      return signedIn() && myRole() == 'superadmin';
+    }
+    function isPrincipal() {
+      return signedIn() && myRole() == 'principal';
+    }
+    function isAdmin() {
+      return isSuperAdmin() || isPrincipal();
+    }
+    function validText(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'name', 'role', 'requestedRole', 'branch', 'rollNo', 'roomNo', 'department', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && validText(request.resource.data.name, 80)
+        && (
+          (
+            request.resource.data.role == 'student'
+            && request.resource.data.keys().hasAll(['branch', 'rollNo', 'roomNo'])
+            && validText(request.resource.data.branch, 40)
+            && validText(request.resource.data.rollNo, 30)
+            && validText(request.resource.data.roomNo, 20)
+          )
+          ||
+          (
+            request.resource.data.role == 'pending'
+            && request.resource.data.keys().hasAll(['department', 'requestedRole'])
+            && validText(request.resource.data.department, 60)
+            && request.resource.data.requestedRole in ['teacher', 'warden', 'principal']
+          )
+        );
+
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+        && (
+          (isSuperAdmin() && request.resource.data.role in ['student', 'pending', 'teacher', 'warden', 'principal'])
+          ||
+          (isPrincipal() && resource.data.role == 'pending' && request.resource.data.role in ['teacher', 'warden'])
+        );
+
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right">
+      <span id="who" class="hint"></span>
+      <button id="logout" class="ghost" type="button">Log out</button>
+    </div>
+  </header>
+  <main class="dash">
+    <h1 class="page-title">Welcome, <span id="name"></span></h1>
+    <div class="card">
+      <div class="row"><span>Branch</span><strong id="branch"></strong></div>
+      <div class="row"><span>Roll number</span><strong id="rollNo"></strong></div>
+      <div class="row"><span>Room number</span><strong id="roomNo"></strong></div>
+      <div class="row"><span>Email</span><strong id="email"></strong></div>
+    </div>
+    <h2>My problems</h2>
+    <p><a class="btn" href="complaint-new.html">Send New Problem</a></p>
+    <p id="c-status" class="hint"></p>
+    <div id="c-list"></div>
+    <h2>Explore</h2>
+    <div class="row"><a href="ranker.html">Teacher Appreciation</a><span class="hint">Rate teachers anonymously</span></div>
+    <div class="row"><a href="rater.html">College Rater</a><span class="hint">Review the college</span></div>
+    <div class="row"><a href="contacts.html">Important contacts</a><span class="hint">Helplines and emergency numbers</span></div>
+  </main>
+  <script type="module">
+    import { requireRole, logout } from "./js/auth.js";
+    import { loadMyComplaints, myQueries, showComplaints, liveUpdates } from "./js/complaints.js";
+
+    const { profile } = await requireRole(["student"]);
+    document.getElementById("name").textContent = profile.name;
+    document.getElementById("branch").textContent = profile.branch;
+    document.getElementById("rollNo").textContent = profile.rollNo;
+    document.getElementById("roomNo").textContent = profile.roomNo;
+    document.getElementById("email").textContent = profile.email;
+    document.getElementById("who").textContent = profile.name;
+    document.getElementById("logout").addEventListener("click", logout);
+    const listOptions = {
+      listEl: document.getElementById("c-list"),
+      statusEl: document.getElementById("c-status"),
+      load: () => loadMyComplaints(profile.uid),
+      own: true
+    };
+    showComplaints(listOptions);
+    liveUpdates({
+      queries: myQueries(profile.uid),
+      staffView: false,
+      selfName: profile.name,
+      listEl: listOptions.listEl,
+      refresh: () => showComplaints(listOptions)
+    });
+  </script>
+</body>
+</html>

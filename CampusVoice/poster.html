@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR Poster | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header no-print">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right"><a class="btn ghost" href="index.html">Back to home</a></div>
+  </header>
+
+  <main class="poster">
+    <h1>CampusVoice</h1>
+    <p class="lead">Report it. Rate it. Get it fixed.</p>
+
+    <div class="qr-box">
+      <img src="img/campusvoice-qr.svg" alt="QR code that opens the CampusVoice website" width="340" height="340">
+    </div>
+    <p class="poster-sub">Scan with your phone camera</p>
+    <p class="poster-url">campusvoice-igc.netlify.app</p>
+
+    <ol class="steps">
+      <li><strong>Scan the code</strong>Open your phone camera and point it at the square.</li>
+      <li><strong>Create your account</strong>Sign up as a student with your email.</li>
+      <li><strong>Rate your college</strong>Share an honest, respectful review for future students.</li>
+    </ol>
+    <p class="hint">A student project made for a hackathon.</p>
+
+    <div class="tools no-print">
+      <button id="print-btn" type="button">Print poster</button>
+      <button id="copy-btn" class="ghost" type="button">Copy link</button>
+      <a class="btn ghost" href="img/campusvoice-qr.png" download="CampusVoice-QR.png">Download QR image</a>
+    </div>
+  </main>
+
+  <script>
+    const SITE = "https://campusvoice-igc.netlify.app/";
+    document.getElementById("print-btn").addEventListener("click", () => window.print());
+    const copyBtn = document.getElementById("copy-btn");
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(SITE);
+        copyBtn.textContent = "Link copied!";
+        setTimeout(() => { copyBtn.textContent = "Copy link"; }, 2500);
+      } catch (error) {
+        window.prompt("Copy this link:", SITE);
+      }
+    });
+  </script>
+</body>
+</html>

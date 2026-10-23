@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right">
+      <a class="btn ghost" href="rater.html">College reviews</a>
+      <a class="btn" href="login.html">Log in</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Report it. Rate it. Get it fixed.</h1>
+      <p class="lead">One place for students to raise problems, rate teachers and review the college, so the right people see them and honest feedback reaches everyone.</p>
+      <p class="cta">
+        <a class="btn" href="signup.html">Create account</a>
+        <a class="btn ghost" href="login.html">Log in</a>
+        <button id="share-btn" class="ghost" type="button">Share this site</button>
+      </p>
+    </section>
+
+    <section class="stats" aria-label="Live college statistics">
+      <div class="stat"><strong id="stat-count">...</strong><span>student reviews of the college</span></div>
+      <div class="stat"><strong id="stat-avg">...</strong><span>average overall rating out of 5</span></div>
+      <div class="stat"><strong>Live</strong><span>problem updates, no refresh needed</span></div>
+    </section>
+
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><strong>Sign up</strong>Students join with their branch, roll number and room. Staff request a role and the Principal approves it.</li>
+      <li><strong>Report or rate</strong>Send your problem with photos to the Warden, a Teacher or the Principal, or rate teachers anonymously.</li>
+      <li><strong>Get it fixed</strong>Staff update the status and leave a remark, and you see it instantly on your phone.</li>
+    </ol>
+
+    <h2>Three tools, one campus voice</h2>
+    <div class="features">
+      <div class="feature"><h3>Problem Sender</h3><p>Hostel, room, device and mess problems go straight to the right people, with live status tracking.</p></div>
+      <div class="feature"><h3>Teacher Appreciation</h3><p>Anonymous ratings on teaching clarity, punctuality, doubt solving and behaviour. The best teachers rise to the top.</p></div>
+      <div class="feature"><h3>College Rater</h3><p>Honest public reviews so future students see the real picture before they take admission.</p><a href="rater.html">Read the reviews</a></div>
+    </div>
+
+    <h2>Use it like an app</h2>
+    <section class="card">
+      <p><strong>Android (Chrome):</strong> open the three-dot menu, then choose Add to Home screen or Install app.</p>
+      <p><strong>iPhone (Safari):</strong> tap the Share button, then choose Add to Home Screen.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">CampusVoice | Built by students, for students | <a href="university.html">University vision (concept)</a> | <a href="poster.html">QR poster</a> | <a href="contacts.html">Important contacts</a></footer>
+
+  <script type="module">
+    import { db } from "./js/firebase.js";
+    import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const shareBtn = document.getElementById("share-btn");
+    shareBtn.addEventListener("click", async () => {
+      const link = new URL(".", location.href).href;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "CampusVoice", text: "Report problems, rate teachers and review our college on CampusVoice.", url: link });
+        } catch (error) {
+          console.log("Share cancelled", error);
+        }
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(link);
+        shareBtn.textContent = "Link copied!";
+        setTimeout(() => { shareBtn.textContent = "Share this site"; }, 2500);
+      } catch (error) {
+        window.prompt("Copy this link:", link);
+      }
+    });
+
+    const countEl = document.getElementById("stat-count");
+    const avgEl = document.getElementById("stat-avg");
+    try {
+      const snap = await getDocs(collection(db, "collegeReviews"));
+      countEl.textContent = String(snap.size);
+      if (snap.size > 0) {
+        let total = 0;
+        snap.forEach((d) => { total += d.data().overall; });
+        avgEl.textContent = (total / snap.size).toFixed(1);
+      } else {
+        avgEl.textContent = "-";
+      }
+    } catch (error) {
+      console.error(error);
+      countEl.textContent = "-";
+      avgEl.textContent = "-";
+    }
+  </script>
+</body>
+</html>

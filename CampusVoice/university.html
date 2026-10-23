@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>University Insights (concept) | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right"><a class="btn ghost" href="index.html">Back to home</a></div>
+  </header>
+
+  <main class="dash">
+    <p class="notice" role="note"><strong>Concept preview.</strong> Every number on this page is sample data for six imaginary colleges. It shows what a University could see once many colleges join CampusVoice.</p>
+    <h1 class="page-title">University Insights</h1>
+    <p class="lead">One view of how colleges perform, built from anonymous student reviews and problem statistics, so the University can spot weak areas early and suggest improvements.</p>
+
+    <div id="kpis" class="stats"></div>
+
+    <h2>Compare colleges</h2>
+    <label for="metric">Rank colleges by</label>
+    <select id="metric"></select>
+    <div id="ranking" class="card rank"></div>
+    <p class="hint">A score appears only for a college with at least 10 reviews, and each row shows how many reviews it is based on.</p>
+
+    <h2>Strongest and weakest areas</h2>
+    <div class="table-wrap">
+      <table id="heat"></table>
+    </div>
+
+    <h2>How quickly problems are resolved</h2>
+    <div id="complaints" class="card rank"></div>
+
+    <h2>Suggested improvements</h2>
+    <p class="hint">Generated automatically from the sample scores above.</p>
+    <ul id="suggestions" class="suggest"></ul>
+
+    <h2>What the University does not see</h2>
+    <section class="card">
+      <p>Only college-level averages and problem statistics. No student names, no problem text or photos, and no individual teacher scores.</p>
+    </section>
+  </main>
+
+  <script>
+    const METRICS = [
+      ["overall", "Overall"], ["mess", "Mess food"], ["study", "Study quality"],
+      ["hostel", "Hostel"], ["campus", "Campus and facilities"], ["wifi", "Wi-Fi"]
+    ];
+    const COLLEGES = [
+      { name: "College A", reviews: 61, scores: { overall: 4.3, mess: 4.1, study: 4.5, hostel: 4.0, campus: 4.4, wifi: 3.8 }, total: 142, resolved: 121, days: 2.1 },
+      { name: "College B", reviews: 48, scores: { overall: 3.9, mess: 3.4, study: 4.2, hostel: 3.7, campus: 4.0, wifi: 3.6 }, total: 118, resolved: 92, days: 3.4 },
+      { name: "College C", reviews: 37, scores: { overall: 3.5, mess: 3.9, study: 3.6, hostel: 3.1, campus: 3.4, wifi: 3.2 }, total: 95, resolved: 60, days: 5.2 },
+      { name: "College D", reviews: 29, scores: { overall: 3.0, mess: 2.7, study: 3.4, hostel: 2.6, campus: 3.1, wifi: 2.9 }, total: 160, resolved: 74, days: 7.8 },
+      { name: "College E", reviews: 52, scores: { overall: 4.0, mess: 3.8, study: 4.1, hostel: 4.2, campus: 3.9, wifi: 4.0 }, total: 87, resolved: 80, days: 1.9 },
+      { name: "College F", reviews: 24, scores: { overall: 3.7, mess: 3.5, study: 3.9, hostel: 3.6, campus: 3.8, wifi: 3.3 }, total: 70, resolved: 58, days: 3.9 }
+    ];
+    const FIX = {
+      mess: "Review mess hygiene, menu and food quality with a student committee.",
+      study: "Support faculty with training and extra doubt-clearing sessions.",
+      hostel: "Audit hostel rooms, water and electricity, and set repair deadlines.",
+      campus: "Improve campus facilities, cleanliness and safety.",
+      wifi: "Upgrade Wi-Fi coverage and bandwidth."
+    };
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function barRow(label, valueText, percent, color) {
+      const row = el("div", "bar-row");
+      const track = el("span", "bar-track");
+      track.setAttribute("aria-hidden", "true");
+      const fill = el("span", "bar-fill");
+      fill.style.width = percent + "%";
+      fill.style.background = color;
+      track.append(fill);
+      row.append(el("span", "bar-label", label), track, el("span", "bar-value", valueText));
+      return row;
+    }
+
+    function renderKpis() {
+      const reviews = COLLEGES.reduce((s, c) => s + c.reviews, 0);
+      const avg = COLLEGES.reduce((s, c) => s + c.scores.overall * c.reviews, 0) / reviews;
+      const total = COLLEGES.reduce((s, c) => s + c.total, 0);
+      const resolved = COLLEGES.reduce((s, c) => s + c.resolved, 0);
+      const items = [
+        [COLLEGES.length, "colleges on CampusVoice"],
+        [reviews, "student reviews"],
+        [avg.toFixed(1), "average overall rating out of 5"],
+        [Math.round((resolved / total) * 100) + "%", "of problems resolved"]
+      ];
+      const box = document.getElementById("kpis");
+      items.forEach(([value, label]) => {
+        const stat = el("div", "stat");
+        stat.append(el("strong", "", String(value)), el("span", "", label));
+        box.append(stat);
+      });
+    }
+
+    function renderRanking() {
+      const key = document.getElementById("metric").value;
+      const box = document.getElementById("ranking");
+      box.textContent = "";
+      COLLEGES.slice().sort((a, b) => b.scores[key] - a.scores[key]).forEach((c, i) => {
+        const v = c.scores[key];
+        const color = v >= 4 ? "var(--ok)" : v >= 3.3 ? "var(--accent)" : "var(--bad)";
+        box.append(barRow("#" + (i + 1) + " " + c.name + " (" + c.reviews + " reviews)", v.toFixed(1), (v / 5) * 100, color));
+      });
+    }
+
+    function heatClass(v) {
+      return v >= 4 ? "heat-high" : v >= 3.3 ? "heat-mid" : "heat-low";
+    }
+
+    function renderHeat() {
+      const table = document.getElementById("heat");
+      const head = el("tr");
+      ["College", "Reviews"].concat(METRICS.map((m) => m[1])).forEach((t) => head.append(el("th", "", t)));
+      table.append(head);
+      COLLEGES.forEach((c) => {
+        const row = el("tr");
+        row.append(el("th", "", c.name), el("td", "", String(c.reviews)));
+        METRICS.forEach(([key]) => row.append(el("td", heatClass(c.scores[key]), c.scores[key].toFixed(1))));
+        table.append(row);
+      });
+    }
+
+    function renderComplaints() {
+      const box = document.getElementById("complaints");
+      COLLEGES.slice().sort((a, b) => a.days - b.days).forEach((c) => {
+        const pct = Math.round((c.resolved / c.total) * 100);
+        const color = pct >= 85 ? "var(--ok)" : pct >= 65 ? "var(--accent)" : "var(--bad)";
+        box.append(barRow(c.name + " (" + c.days + " days average)", pct + "%", pct, color));
+      });
+    }
+
+    function renderSuggestions() {
+      const items = [];
+      COLLEGES.forEach((c) => {
+        const weakest = METRICS.filter((m) => m[0] !== "overall")
+          .map(([key, label]) => ({ key, label, value: c.scores[key] }))
+          .sort((a, b) => a.value - b.value)[0];
+        if (weakest.value < 3.3) {
+          items.push({ rank: weakest.value, text: c.name + ": " + weakest.label + " scores " + weakest.value.toFixed(1) + " out of 5. " + FIX[weakest.key] });
+        }
+        if (c.days > 6) {
+          items.push({ rank: 3, text: c.name + ": problems take " + c.days + " days on average to resolve. Set response deadlines and automatic escalation." });
+        }
+      });
+      const list = document.getElementById("suggestions");
+      items.sort((a, b) => a.rank - b.rank).slice(0, 5).forEach((item) => list.append(el("li", "", item.text)));
+    }
+
+    const select = document.getElementById("metric");
+    METRICS.forEach(([key, label]) => {
+      const option = el("option", "", label);
+      option.value = key;
+      select.append(option);
+    });
+    select.addEventListener("change", renderRanking);
+    renderKpis();
+    renderRanking();
+    renderHeat();
+    renderComplaints();
+    renderSuggestions();
+  </script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right">
+      <span id="who" class="hint"></span>
+      <button id="logout" class="ghost" type="button">Log out</button>
+    </div>
+  </header>
+  <main class="dash">
+    <h1 class="page-title">Welcome, <span id="name"></span></h1>
+    <p><span id="role" class="badge"></span></p>
+    <h2>Staff waiting for approval</h2>
+    <p id="status" class="hint"></p>
+    <div id="list"></div>
+    <h2>Campus overview</h2>
+    <div id="kpis" class="stats"></div>
+    <div class="charts">
+      <section class="card"><h3>Problems by status</h3><div id="chart-status"></div></section>
+      <section class="card"><h3>Problems by category</h3><div id="chart-category"></div></section>
+    </div>
+    <h2>All problems</h2>
+    <p id="c-status" class="hint"></p>
+    <div id="c-list"></div>
+    <h2>Explore</h2>
+    <div class="row"><a href="ranker.html">Teacher Appreciation</a><span class="hint">Top rated teachers</span></div>
+    <div class="row"><a href="rater.html">College Rater</a><span class="hint">Public reviews</span></div>
+  </main>
+  <script type="module">
+    import { requireRole, logout, friendlyError } from "./js/auth.js";
+    import { loadAllComplaints, allQueries, showComplaints, liveUpdates, CATEGORIES, STATUS_LABELS } from "./js/complaints.js";
+    import { db } from "./js/firebase.js";
+    import {
+      collection, query, where, getDocs, doc, updateDoc
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const { profile } = await requireRole(["principal", "superadmin"]);
+    document.getElementById("name").textContent = profile.name;
+    document.getElementById("who").textContent = profile.name;
+    document.getElementById("role").textContent = profile.role === "superadmin" ? "Super Admin" : "Principal";
+    document.getElementById("logout").addEventListener("click", logout);
+
+    const list = document.getElementById("list");
+    const status = document.getElementById("status");
+
+    function buildRow(uid, data) {
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const info = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = data.name;
+      const sub = document.createElement("div");
+      sub.className = "hint";
+      sub.textContent = data.department + " | wants to be " + data.requestedRole + " | " + data.email;
+      info.append(title, sub);
+
+      const button = document.createElement("button");
+      const allowed = profile.role === "superadmin" || data.requestedRole !== "principal";
+      button.textContent = allowed ? "Approve as " + data.requestedRole : "Needs Super Admin";
+      button.disabled = !allowed;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await updateDoc(doc(db, "users", uid), { role: data.requestedRole });
+          await loadPending();
+        } catch (error) {
+          console.error(error);
+          status.textContent = "Approval failed: " + friendlyError(error);
+          button.disabled = false;
+        }
+      });
+
+      row.append(info, button);
+      return row;
+    }
+
+    async function loadPending() {
+      list.textContent = "";
+      status.textContent = "Loading...";
+      try {
+        const snap = await getDocs(query(collection(db, "users"), where("role", "==", "pending")));
+        status.textContent = snap.empty ? "Nobody is waiting for approval." : "";
+        snap.forEach((d) => list.appendChild(buildRow(d.id, d.data())));
+      } catch (error) {
+        console.error(error);
+        status.textContent = "Could not load requests: " + friendlyError(error);
+      }
+    }
+
+    loadPending();
+    function drawBars(container, rows) {
+      container.textContent = "";
+      const max = Math.max(1, ...rows.map((r) => r[1]));
+      rows.forEach(([label, value, color]) => {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        const name = document.createElement("span");
+        name.className = "bar-label";
+        name.textContent = label;
+        const track = document.createElement("span");
+        track.className = "bar-track";
+        track.setAttribute("aria-hidden", "true");
+        const fill = document.createElement("span");
+        fill.className = "bar-fill";
+        fill.style.width = (value / max * 100) + "%";
+        fill.style.background = color;
+        track.append(fill);
+        const num = document.createElement("span");
+        num.className = "bar-value";
+        num.textContent = String(value);
+        row.append(name, track, num);
+        container.append(row);
+      });
+    }
+
+    function renderAnalytics(list) {
+      const count = (test) => list.filter(test).length;
+      const total = list.length;
+      const open = count((c) => c.status !== "resolved");
+      const urgent = count((c) => c.priority === "Urgent" && c.status !== "resolved");
+      const kpis = [
+        [total, "total problems"],
+        [open, "still open"],
+        [total ? Math.round(((total - open) / total) * 100) + "%" : "-", "resolved"],
+        [urgent, "urgent and still open"]
+      ];
+      const kpiEl = document.getElementById("kpis");
+      kpiEl.textContent = "";
+      kpis.forEach(([value, label]) => {
+        const box = document.createElement("div");
+        box.className = "stat";
+        const big = document.createElement("strong");
+        big.textContent = String(value);
+        const small = document.createElement("span");
+        small.textContent = label;
+        box.append(big, small);
+        kpiEl.append(box);
+      });
+      const statusColors = { reported: "var(--bad)", in_progress: "var(--accent)", resolved: "var(--ok)" };
+      drawBars(
+        document.getElementById("chart-status"),
+        Object.entries(STATUS_LABELS).map(([key, label]) => [label, count((c) => c.status === key), statusColors[key]])
+      );
+      drawBars(
+        document.getElementById("chart-category"),
+        CATEGORIES.map((cat) => [cat, count((c) => c.category === cat), "var(--accent)"])
+      );
+    }
+
+    const listOptions = {
+      listEl: document.getElementById("c-list"),
+      statusEl: document.getElementById("c-status"),
+      load: async () => {
+        const list = await loadAllComplaints();
+        renderAnalytics(list);
+        return list;
+      },
+      manager: profile.name,
+      filters: true
+    };
+    showComplaints(listOptions);
+    liveUpdates({
+      queries: allQueries(),
+      staffView: true,
+      selfName: profile.name,
+      listEl: listOptions.listEl,
+      refresh: () => showComplaints(listOptions)
+    });
+  </script>
+</body>
+</html>

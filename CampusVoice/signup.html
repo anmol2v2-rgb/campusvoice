@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign up | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header"><a class="wordmark" href="index.html">CampusVoice</a></header>
+  <main class="narrow">
+    <h1 class="page-title">Create your account</h1>
+    <form id="signup-form" class="card">
+      <div class="choice">
+        <label><input type="radio" name="accountType" value="student" checked> Student</label>
+        <label><input type="radio" name="accountType" value="staff"> Staff</label>
+      </div>
+
+      <fieldset id="student-fields">
+        <label for="studentName">Full name</label>
+        <input id="studentName" name="studentName" type="text" maxlength="80" autocomplete="name" required>
+        <label for="branch">Branch</label>
+        <select id="branch" name="branch" required>
+          <option value="">Select your branch</option>
+          <option>CSE</option><option>IT</option><option>ECE</option>
+          <option>EE</option><option>ME</option><option>Civil</option><option>Other</option>
+        </select>
+        <label for="rollNo">Roll number</label>
+        <input id="rollNo" name="rollNo" type="text" maxlength="30" required>
+        <label for="roomNo">Room number</label>
+        <input id="roomNo" name="roomNo" type="text" maxlength="20" required>
+        <p class="hint">Day scholar? Write DS in the room number.</p>
+      </fieldset>
+
+      <fieldset id="staff-fields" hidden disabled>
+        <label for="staffName">Full name</label>
+        <input id="staffName" name="staffName" type="text" maxlength="80" autocomplete="name" required>
+        <label for="department">Department or hostel</label>
+        <input id="department" name="department" type="text" maxlength="60" required>
+        <label for="requestedRole">Role you are requesting</label>
+        <select id="requestedRole" name="requestedRole" required>
+          <option value="teacher">Teacher</option>
+          <option value="warden">Warden</option>
+          <option value="principal">Principal</option>
+        </select>
+        <p class="hint">Staff accounts must be approved before they get access.</p>
+      </fieldset>
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+      <label for="password">Password (at least 8 characters)</label>
+      <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+      <label for="confirm">Confirm password</label>
+      <input id="confirm" name="confirm" type="password" minlength="8" autocomplete="new-password" required>
+      <label class="check show-pw"><input type="checkbox" id="show-pw"> Show passwords</label>
+      <button class="full" type="submit">Create account</button>
+      <p id="message" class="message" role="alert"></p>
+    </form>
+    <p class="alt">Already registered? <a href="login.html">Log in</a></p>
+  </main>
+  <script type="module">
+    import { register, pageForRole, friendlyError } from "./js/auth.js";
+
+    const form = document.getElementById("signup-form");
+    const message = document.getElementById("message");
+    const studentFields = document.getElementById("student-fields");
+    const staffFields = document.getElementById("staff-fields");
+
+    function accountType() {
+      return form.elements.accountType.value;
+    }
+
+    function updateFields() {
+      const isStudent = accountType() === "student";
+      studentFields.hidden = !isStudent;
+      studentFields.disabled = !isStudent;
+      staffFields.hidden = isStudent;
+      staffFields.disabled = isStudent;
+    }
+
+    form.addEventListener("change", (event) => {
+      if (event.target.name === "accountType") updateFields();
+    });
+    updateFields();
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const f = form.elements;
+      message.className = "message";
+      message.textContent = "";
+
+      if (f.password.value !== f.confirm.value) {
+        message.textContent = "Passwords do not match.";
+        return;
+      }
+
+      let profile;
+      if (accountType() === "student") {
+        profile = {
+          role: "student",
+          name: f.studentName.value.trim(),
+          branch: f.branch.value,
+          rollNo: f.rollNo.value.trim().toUpperCase(),
+          roomNo: f.roomNo.value.trim()
+        };
+      } else {
+        profile = {
+          role: "pending",
+          name: f.staffName.value.trim(),
+          department: f.department.value.trim(),
+          requestedRole: f.requestedRole.value
+        };
+      }
+
+      if (Object.values(profile).some((value) => !value)) {
+        message.textContent = "Please fill in every field.";
+        return;
+      }
+
+      const button = form.querySelector("button[type=submit]");
+      button.disabled = true;
+      message.className = "message ok";
+      message.textContent = "Creating your account...";
+      try {
+        await register(f.email.value.trim(), f.password.value, profile);
+        location.replace(pageForRole(profile.role));
+      } catch (error) {
+        console.error(error);
+        message.className = "message";
+        message.textContent = friendlyError(error);
+        button.disabled = false;
+      }
+    });
+    document.getElementById("show-pw").addEventListener("change", (event) => {
+      const type = event.target.checked ? "text" : "password";
+      form.elements.password.type = type;
+      form.elements.confirm.type = type;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staff | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right">
+      <span id="who" class="hint"></span>
+      <button id="logout" class="ghost" type="button">Log out</button>
+    </div>
+  </header>
+  <main class="dash">
+    <h1 class="page-title">Welcome, <span id="name"></span></h1>
+    <p><span id="role" class="badge"></span></p>
+    <div id="pending-box" class="card" hidden>
+      <h2>Waiting for approval</h2>
+      <p>Your account was created. The Principal must approve it before you can see problems. Log in again later to check.</p>
+    </div>
+    <div id="active-box" hidden>
+      <section id="my-ratings" class="card" hidden>
+        <h2>Your teaching ratings</h2>
+        <p id="my-ratings-note" class="hint"></p>
+        <div id="my-ratings-bars"></div>
+      </section>
+      <h2>Problems sent to you</h2>
+      <p id="c-status" class="hint"></p>
+      <div id="c-list"></div>
+      <div id="teacher-row" class="row" hidden><a href="ranker.html">Teacher Appreciation and your ratings</a><span class="hint">Anonymous</span></div>
+    </div>
+  </main>
+  <script type="module">
+    import { requireRole, logout, friendlyError } from "./js/auth.js";
+    import { TEACHER_FACTORS, MIN_RATINGS, stars, barRow, scoreColor, loadMyRatingSummary } from "./js/ratings.js";
+    import { loadInbox, inboxQueries, showComplaints, liveUpdates } from "./js/complaints.js";
+
+    const { profile } = await requireRole(["pending", "teacher", "warden"]);
+
+    async function showMyRatings() {
+      const box = document.getElementById("my-ratings");
+      const note = document.getElementById("my-ratings-note");
+      const bars = document.getElementById("my-ratings-bars");
+      box.hidden = false;
+      note.textContent = "Loading...";
+      try {
+        const s = await loadMyRatingSummary(profile.uid);
+        if (s.count < MIN_RATINGS) {
+          note.textContent = s.count + " of " + MIN_RATINGS + " ratings so far. Your scores appear after " + MIN_RATINGS + " anonymous ratings.";
+          return;
+        }
+        note.textContent = "Based on " + s.count + " anonymous ratings. Overall " + s.overall.toFixed(1) + " out of 5 " + stars(s.overall) + ". Ratings never show who gave them.";
+        TEACHER_FACTORS.forEach(([key, label]) => {
+          const v = s.avgs[key];
+          bars.append(barRow(label, v.toFixed(1), (v / 5) * 100, scoreColor(v)));
+        });
+      } catch (error) {
+        console.error(error);
+        note.textContent = "Could not load your ratings: " + friendlyError(error);
+      }
+    }
+    document.getElementById("name").textContent = profile.name;
+    document.getElementById("who").textContent = profile.name;
+    document.getElementById("logout").addEventListener("click", logout);
+
+    if (profile.role === "pending") {
+      document.getElementById("role").textContent = "Pending: " + profile.requestedRole;
+      document.getElementById("pending-box").hidden = false;
+    } else {
+      document.getElementById("role").textContent = profile.role;
+      document.getElementById("active-box").hidden = false;
+      document.getElementById("teacher-row").hidden = profile.role !== "teacher";
+      if (profile.role === "teacher") showMyRatings();
+      const listOptions = {
+        listEl: document.getElementById("c-list"),
+        statusEl: document.getElementById("c-status"),
+        load: () => loadInbox(profile.uid, profile.role),
+        manager: profile.name,
+        filters: true
+      };
+      showComplaints(listOptions);
+      liveUpdates({
+        queries: inboxQueries(profile.uid, profile.role),
+        staffView: true,
+        selfName: profile.name,
+        listEl: listOptions.listEl,
+        refresh: () => showComplaints(listOptions)
+      });
+    }
+  </script>
+</body>
+</html>

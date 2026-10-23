@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Important contacts | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right"><a class="btn ghost" href="index.html">Back to home</a></div>
+  </header>
+  <main class="dash">
+    <h1 class="page-title">Important contacts</h1>
+    <p class="lead">Helplines you can call for help. Tap a number on your phone to call.</p>
+
+    <section id="college-box" hidden>
+      <h2>Your college</h2>
+      <div id="college-list" class="card"></div>
+    </section>
+
+    <h2>Emergency</h2>
+    <div id="emergency" class="card"></div>
+
+    <h2>Safety and wellbeing</h2>
+    <div id="wellbeing" class="card"></div>
+
+    <p class="hint">Numbers can change. Please check an official source if a call does not connect.</p>
+  </main>
+  <script>
+    // To add your college's own numbers, fill this list in your copy of the file, for example:
+    // { name: "Chief Warden", phone: "+911234567890" }
+    // The "Your college" section stays hidden while the list is empty.
+    const COLLEGE_CONTACTS = [];
+
+    const EMERGENCY = [
+      ["National emergency number", "112"],
+      ["Police", "100"],
+      ["Fire", "101"],
+      ["Ambulance", "108"]
+    ];
+    const WELLBEING = [
+      ["Women helpline", "181"],
+      ["Women in distress (police)", "1091"],
+      ["Child helpline", "1098"],
+      ["Tele-MANAS mental health support", "14416"],
+      ["UGC anti-ragging helpline", "1800-180-5522"]
+    ];
+
+    function fill(containerId, items) {
+      const box = document.getElementById(containerId);
+      items.forEach(([name, phone]) => {
+        const row = document.createElement("div");
+        row.className = "row";
+        const label = document.createElement("span");
+        label.textContent = name;
+        const link = document.createElement("a");
+        link.href = "tel:" + phone.replace(/[^0-9+]/g, "");
+        link.textContent = phone;
+        link.className = "score";
+        row.append(label, link);
+        box.append(row);
+      });
+    }
+
+    fill("emergency", EMERGENCY);
+    fill("wellbeing", WELLBEING);
+    if (COLLEGE_CONTACTS.length) {
+      document.getElementById("college-box").hidden = false;
+      fill("college-list", COLLEGE_CONTACTS.map((c) => [c.name, c.phone]));
+    }
+  </script>
+</body>
+</html>

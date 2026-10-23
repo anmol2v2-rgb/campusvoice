@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>College Rater | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right"><a id="auth-link" class="btn ghost" href="login.html">Log in</a></div>
+  </header>
+  <main class="dash">
+    <h1 class="page-title">College Rater</h1>
+    <p class="hint">Honest reviews by current students. Reviews cannot be edited or removed.</p>
+    <section class="card">
+      <h3 class="card-title">Average scores</h3>
+      <div id="summary"></div>
+    </section>
+    <section class="card" id="write-box">
+      <h2>Write a review</h2>
+      <div id="write-area"></div>
+    </section>
+    <h2>Student reviews</h2>
+    <div class="filters">
+      <select id="sort" aria-label="Sort reviews">
+        <option value="new">Newest first</option>
+        <option value="high">Highest rated</option>
+        <option value="low">Lowest rated</option>
+      </select>
+      <select id="branch-filter" aria-label="Filter by branch"><option value="">All branches</option></select>
+    </div>
+    <p id="status" class="hint"></p>
+    <div id="reviews"></div>
+  </main>
+  <script type="module">
+    import { auth } from "./js/firebase.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getProfile, pageForRole, friendlyError } from "./js/auth.js";
+    import {
+      COLLEGE_FACTORS, el, stars, barRow, scoreColor, starInput, containsBanned, loadCollegeReviews, hasReviewed, submitCollegeReview
+    } from "./js/ratings.js";
+
+    const summary = document.getElementById("summary");
+    const reviewsEl = document.getElementById("reviews");
+    const statusEl = document.getElementById("status");
+    const writeArea = document.getElementById("write-area");
+
+    let allReviews = [];
+    const sortEl = document.getElementById("sort");
+    const branchEl = document.getElementById("branch-filter");
+
+    function millis(r) {
+      return r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis() : 0;
+    }
+
+    function renderReviews() {
+      reviewsEl.textContent = "";
+      const branch = branchEl.value;
+      const list = allReviews.filter((r) => !branch || r.branch === branch);
+      if (sortEl.value === "high") list.sort((a, b) => b.overall - a.overall || millis(b) - millis(a));
+      else if (sortEl.value === "low") list.sort((a, b) => a.overall - b.overall || millis(b) - millis(a));
+      else list.sort((a, b) => millis(b) - millis(a));
+      statusEl.textContent = allReviews.length === 0
+        ? "No reviews yet. Be the first!"
+        : "Showing " + list.length + " of " + allReviews.length + " reviews";
+      list.forEach((r) => {
+        const card = el("article", "complaint");
+        const when = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate().toLocaleDateString() : "";
+        const head = el("div", "complaint-head");
+        head.append(el("strong", "", stars(r.overall) + "  " + r.branch + " student"), el("span", "hint", when));
+        card.append(head);
+        if (r.comment) card.append(el("p", "", r.comment));
+        card.append(el("div", "hint", COLLEGE_FACTORS.filter(([k]) => k !== "overall").map(([k, l]) => l + " " + r[k] + "/5").join(" | ")));
+        reviewsEl.append(card);
+      });
+    }
+
+    sortEl.addEventListener("change", renderReviews);
+    branchEl.addEventListener("change", renderReviews);
+
+    async function loadReviews() {
+      summary.textContent = "";
+      statusEl.textContent = "Loading...";
+      try {
+        allReviews = await loadCollegeReviews();
+        const keep = branchEl.value;
+        branchEl.textContent = "";
+        const all = el("option", "", "All branches");
+        all.value = "";
+        branchEl.append(all);
+        [...new Set(allReviews.map((r) => r.branch))].sort().forEach((b) => {
+          const option = el("option", "", b);
+          option.value = b;
+          branchEl.append(option);
+        });
+        if ([...branchEl.options].some((o) => o.value === keep)) branchEl.value = keep;
+        if (allReviews.length) {
+          summary.append(el("div", "hint", allReviews.length + " student reviews"));
+          COLLEGE_FACTORS.forEach(([key, label]) => {
+            const mean = allReviews.reduce((sum, r) => sum + r[key], 0) / allReviews.length;
+            summary.append(barRow(label, mean.toFixed(1), (mean / 5) * 100, scoreColor(mean)));
+          });
+        }
+        renderReviews();
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = "Could not load reviews: " + friendlyError(error);
+      }
+    }
+
+    function buildForm(profile) {
+      writeArea.textContent = "";
+      const inputs = COLLEGE_FACTORS.map(([key, label]) => ({ key, widget: starInput(label) }));
+      inputs.forEach((i) => writeArea.append(i.widget.element));
+      const comment = el("textarea");
+      comment.rows = 4;
+      comment.maxLength = 1000;
+      comment.placeholder = "Write your honest experience (optional)";
+      const button = el("button", "full", "Post anonymous review");
+      const message = el("p", "message");
+      message.setAttribute("role", "alert");
+      writeArea.append(el("label", "", "Your review"), comment, button, message);
+
+      button.addEventListener("click", async () => {
+        message.className = "message";
+        message.textContent = "";
+        if (inputs.some((i) => i.widget.value === 0)) {
+          message.textContent = "Please give a star rating for every item.";
+          return;
+        }
+        const text = comment.value.trim();
+        if (containsBanned(text)) {
+          message.textContent = "Please remove abusive words. Reviews cannot be edited or removed after posting.";
+          return;
+        }
+        const scores = {};
+        inputs.forEach((i) => { scores[i.key] = i.widget.value; });
+        button.disabled = true;
+        try {
+          await submitCollegeReview(profile.uid, profile.branch, scores, text);
+          writeArea.textContent = "";
+          writeArea.append(el("p", "message ok", "Thank you! Your review was posted."));
+          await loadReviews();
+        } catch (error) {
+          console.error(error);
+          message.textContent = friendlyError(error);
+          button.disabled = false;
+        }
+      });
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      writeArea.textContent = "";
+      if (!user) {
+        const p = el("p", "hint", "Log in as a student to write a review. ");
+        const a = el("a", "", "Log in");
+        a.href = "login.html";
+        p.append(a);
+        writeArea.append(p);
+        return;
+      }
+      try {
+        const profile = await getProfile(user.uid);
+        const link = document.getElementById("auth-link");
+        if (profile) { link.textContent = "My home"; link.href = pageForRole(profile.role); }
+        if (!profile || profile.role !== "student") {
+          writeArea.append(el("p", "hint", "Only students can write reviews."));
+        } else if (await hasReviewed(user.uid)) {
+          writeArea.append(el("p", "hint", "You have already posted your review. Thank you!"));
+        } else {
+          buildForm(profile);
+        }
+      } catch (error) {
+        console.error(error);
+        writeArea.append(el("p", "message", friendlyError(error)));
+      }
+    });
+
+    loadReviews();
+  </script>
+</body>
+</html>

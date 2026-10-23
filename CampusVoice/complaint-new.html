@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send Your Problem | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right"><a class="btn ghost" href="student.html">Back</a></div>
+  </header>
+  <main class="narrow">
+    <h1 id="page-title" class="page-title">Send New Problem</h1>
+    <form id="complaint-form" class="card">
+      <label for="title">Title</label>
+      <input id="title" name="title" type="text" maxlength="100" required>
+      <label for="category">Category</label>
+      <select id="category" name="category" required></select>
+      <label for="priority">Priority</label>
+      <select id="priority" name="priority" required></select>
+      <label for="description">Describe the problem</label>
+      <textarea id="description" name="description" rows="5" maxlength="1500" required></textarea>
+
+      <label for="photo-input">Photos (optional, up to 2)</label>
+      <input id="photo-input" type="file" accept="image/*" multiple>
+      <p id="photo-hint" class="hint"></p>
+      <div id="previews" class="photos"></div>
+
+      <div id="recipients-box">
+        <label>Send to</label>
+        <div class="stack">
+          <label class="check"><input type="checkbox" id="to-warden" checked> Warden</label>
+          <label class="check"><input type="checkbox" id="to-principal"> Principal</label>
+          <label class="check"><input type="checkbox" id="to-teacher"> A teacher</label>
+          <select id="teacher" hidden></select>
+        </div>
+        <p id="teacher-hint" class="hint"></p>
+      </div>
+
+      <button id="submit-btn" class="full" type="submit">Send Your Problem</button>
+      <p id="message" class="message" role="alert"></p>
+    </form>
+  </main>
+  <script type="module">
+    import { requireRole, friendlyError } from "./js/auth.js";
+    import { CATEGORIES, PRIORITIES, createComplaint, getComplaint, updateOwnComplaint, getTeachers, compressImage } from "./js/complaints.js";
+    import { el } from "./js/ratings.js";
+
+    const { profile } = await requireRole(["student"]);
+    const form = document.getElementById("complaint-form");
+    const message = document.getElementById("message");
+    const toTeacher = document.getElementById("to-teacher");
+    const teacherSelect = document.getElementById("teacher");
+    const teacherHint = document.getElementById("teacher-hint");
+    const photoInput = document.getElementById("photo-input");
+    const photoHint = document.getElementById("photo-hint");
+    const previews = document.getElementById("previews");
+    const submitBtn = document.getElementById("submit-btn");
+    const editId = new URLSearchParams(location.search).get("edit");
+    let photos = [];
+
+    function fill(select, values) {
+      values.forEach((v) => {
+        const option = document.createElement("option");
+        option.value = v;
+        option.textContent = v;
+        select.append(option);
+      });
+    }
+    fill(document.getElementById("category"), CATEGORIES);
+    fill(document.getElementById("priority"), PRIORITIES);
+    document.getElementById("priority").value = "Medium";
+
+    function renderPreviews() {
+      previews.textContent = "";
+      photos.forEach((src, index) => {
+        const wrap = el("span", "preview");
+        const img = el("img", "thumb");
+        img.src = src;
+        img.alt = "Selected photo " + (index + 1);
+        const remove = el("button", "ghost", "Remove");
+        remove.type = "button";
+        remove.addEventListener("click", () => { photos.splice(index, 1); renderPreviews(); });
+        wrap.append(img, remove);
+        previews.append(wrap);
+      });
+      photoInput.disabled = photos.length >= 2;
+      photoHint.textContent = photos.length + " of 2 photos added.";
+    }
+
+    photoInput.addEventListener("change", async () => {
+      message.className = "message";
+      message.textContent = "";
+      const files = [...photoInput.files];
+      photoInput.value = "";
+      for (const file of files) {
+        if (photos.length >= 2) break;
+        try {
+          photos.push(await compressImage(file));
+        } catch (error) {
+          message.textContent = error.message;
+        }
+      }
+      renderPreviews();
+    });
+
+    async function start() {
+      if (editId) {
+        const c = await getComplaint(editId);
+        if (!c || c.studentUid !== profile.uid || c.status !== "reported") {
+          location.replace("student.html");
+          return;
+        }
+        document.getElementById("page-title").textContent = "Edit your problem";
+        document.getElementById("recipients-box").hidden = true;
+        submitBtn.textContent = "Save changes";
+        form.elements.title.value = c.title;
+        form.elements.category.value = c.category;
+        form.elements.priority.value = c.priority;
+        form.elements.description.value = c.description;
+        photos = [...(c.photos || [])];
+      } else {
+        try {
+          const teachers = await getTeachers();
+          if (teachers.length === 0) {
+            toTeacher.disabled = true;
+            teacherHint.textContent = "No teachers are registered yet.";
+          }
+          teachers.forEach((t) => {
+            const option = document.createElement("option");
+            option.value = t.uid;
+            option.textContent = t.name + " (" + t.department + ")";
+            teacherSelect.append(option);
+          });
+        } catch (error) {
+          console.error(error);
+        }
+        toTeacher.addEventListener("change", () => { teacherSelect.hidden = !toTeacher.checked; });
+      }
+      renderPreviews();
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      message.className = "message";
+      message.textContent = "";
+      const title = form.elements.title.value.trim();
+      const description = form.elements.description.value.trim();
+      if (!title || !description) { message.textContent = "Please fill in the title and description."; return; }
+      const fields = {
+        title, description, photos,
+        category: form.elements.category.value,
+        priority: form.elements.priority.value
+      };
+
+      const recipients = [];
+      const recipientLabels = [];
+      if (!editId) {
+        if (document.getElementById("to-warden").checked) { recipients.push("role:warden"); recipientLabels.push("Warden"); }
+        if (document.getElementById("to-principal").checked) { recipients.push("role:principal"); recipientLabels.push("Principal"); }
+        if (toTeacher.checked && teacherSelect.value) {
+          recipients.push("uid:" + teacherSelect.value);
+          recipientLabels.push("Teacher: " + teacherSelect.options[teacherSelect.selectedIndex].textContent);
+        }
+        if (recipients.length === 0) { message.textContent = "Choose at least one person to send it to."; return; }
+      }
+
+      submitBtn.disabled = true;
+      message.className = "message ok";
+      message.textContent = editId ? "Saving..." : "Sending...";
+      try {
+        if (editId) await updateOwnComplaint(editId, fields);
+        else await createComplaint(profile.uid, profile, { ...fields, recipients, recipientLabels });
+        location.replace("student.html");
+      } catch (error) {
+        console.error(error);
+        message.className = "message";
+        message.textContent = friendlyError(error);
+        submitBtn.disabled = false;
+      }
+    });
+
+    start().catch((error) => {
+      console.error(error);
+      message.textContent = friendlyError(error);
+    });
+  </script>
+</body>
+</html>

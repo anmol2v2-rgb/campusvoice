@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teacher Appreciation | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">CampusVoice</a>
+    <div class="header-right">
+      <a id="back" class="btn ghost" href="login.html">Back</a>
+      <button id="logout" class="ghost" type="button">Log out</button>
+    </div>
+  </header>
+  <main class="dash">
+    <h1 class="page-title">Teacher Appreciation</h1>
+    <p class="hint">Ratings are anonymous. A teacher appears in Top Rated after 3 ratings.</p>
+    <h2>Top Rated teachers</h2>
+    <p id="top-status" class="hint"></p>
+    <div id="top-list"></div>
+    <h2>Waiting for more ratings</h2>
+    <div id="waiting-list"></div>
+    <section id="rate-box" class="card" hidden>
+      <h2>Rate a teacher</h2>
+      <p id="rate-note" class="hint"></p>
+      <form id="rate-form">
+        <label for="teacher">Teacher</label>
+        <select id="teacher" required></select>
+        <div id="stars"></div>
+        <button class="full" type="submit">Submit anonymous rating</button>
+        <p id="message" class="message" role="alert"></p>
+      </form>
+    </section>
+  </main>
+  <script type="module">
+    import { requireRole, logout, pageForRole, friendlyError } from "./js/auth.js";
+    import { getTeachers } from "./js/complaints.js";
+    import {
+      TEACHER_FACTORS, MIN_RATINGS, el, stars, starInput, loadTeacherStats, hasRatedTeacher, rateTeacher
+    } from "./js/ratings.js";
+
+    const { profile } = await requireRole(["student", "teacher", "warden", "principal", "superadmin"]);
+    document.getElementById("back").href = pageForRole(profile.role);
+    document.getElementById("logout").addEventListener("click", logout);
+
+    const topList = document.getElementById("top-list");
+    const topStatus = document.getElementById("top-status");
+    const waitingList = document.getElementById("waiting-list");
+    const rateBox = document.getElementById("rate-box");
+    const form = document.getElementById("rate-form");
+    const select = document.getElementById("teacher");
+    const message = document.getElementById("message");
+    const inputs = TEACHER_FACTORS.map(([key, label]) => ({ key, widget: starInput(label) }));
+    inputs.forEach((i) => document.getElementById("stars").append(i.widget.element));
+
+    async function render() {
+      topList.textContent = "";
+      waitingList.textContent = "";
+      topStatus.textContent = "Loading...";
+      try {
+        const teachers = await getTeachers();
+        const stats = await loadTeacherStats(teachers);
+        const ready = stats.filter((s) => s.count >= MIN_RATINGS).sort((a, b) => b.overall - a.overall);
+        const waiting = stats.filter((s) => s.count < MIN_RATINGS);
+        topStatus.textContent = ready.length ? "" : "No teacher has enough ratings yet.";
+        ready.forEach((s, index) => {
+          const row = el("div", "row");
+          const info = el("div");
+          info.append(el("strong", "", "#" + (index + 1) + "  " + s.name));
+          info.append(el("div", "hint", s.department + " | " + s.count + " ratings"));
+          info.append(el("div", "hint", TEACHER_FACTORS.map(([k, l]) => l + " " + s.avgs[k].toFixed(1)).join(" | ")));
+          const score = el("div", "score", stars(s.overall) + "  " + s.overall.toFixed(1));
+          row.append(info, score);
+          topList.append(row);
+        });
+        waiting.forEach((s) => {
+          const row = el("div", "row");
+          row.append(el("span", "", s.name + " (" + s.department + ")"), el("span", "hint", s.count + " of " + MIN_RATINGS + " ratings"));
+          waitingList.append(row);
+        });
+        if (profile.role === "student") await buildForm(teachers);
+      } catch (error) {
+        console.error(error);
+        topStatus.textContent = "Could not load ratings: " + friendlyError(error);
+      }
+    }
+
+    async function buildForm(teachers) {
+      select.textContent = "";
+      const done = await Promise.all(teachers.map((t) => hasRatedTeacher(profile.uid, t.uid)));
+      let available = 0;
+      teachers.forEach((t, i) => {
+        const option = el("option", "", t.name + " (" + t.department + ")" + (done[i] ? " - already rated" : ""));
+        option.value = t.uid;
+        option.disabled = done[i];
+        if (!done[i]) available++;
+        select.append(option);
+      });
+      rateBox.hidden = teachers.length === 0;
+      form.hidden = available === 0;
+      if (available > 0) select.value = teachers.find((t, i) => !done[i]).uid;
+      document.getElementById("rate-note").textContent =
+        teachers.length > 0 && available === 0 ? "You have rated every teacher. Thank you!" : "";
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      message.className = "message";
+      message.textContent = "";
+      if (inputs.some((i) => i.widget.value === 0)) {
+        message.textContent = "Please give a star rating for every factor.";
+        return;
+      }
+      const scores = {};
+      inputs.forEach((i) => { scores[i.key] = i.widget.value; });
+      const button = form.querySelector("button[type=submit]");
+      button.disabled = true;
+      try {
+        await rateTeacher(profile.uid, select.value, scores);
+        inputs.forEach((i) => i.widget.reset());
+        await render();
+        message.className = "message ok";
+        message.textContent = "Thank you! Your anonymous rating was saved.";
+      } catch (error) {
+        console.error(error);
+        message.textContent = friendlyError(error);
+      }
+      button.disabled = false;
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in | CampusVoice</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#120b2e">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <script src="js/ui.js"></script>
+</head>
+<body>
+  <header class="site-header"><a class="wordmark" href="index.html">CampusVoice</a></header>
+  <main class="narrow">
+    <h1 class="page-title">Log in</h1>
+    <form id="login-form" class="card">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <label class="check show-pw"><input type="checkbox" id="show-pw"> Show password</label>
+      <button class="full" type="submit">Log in</button>
+      <p id="message" class="message" role="alert"></p>
+      <button id="forgot-btn" class="ghost forgot" type="button">Forgot password?</button>
+    </form>
+    <p class="alt">New here? <a href="signup.html">Create an account</a></p>
+  </main>
+  <script type="module">
+    import { login, sendReset, pageForRole, friendlyError } from "./js/auth.js";
+
+    const form = document.getElementById("login-form");
+    const message = document.getElementById("message");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("button[type=submit]");
+      button.disabled = true;
+      message.className = "message ok";
+      message.textContent = "Logging in...";
+      try {
+        const profile = await login(form.elements.email.value.trim(), form.elements.password.value);
+        location.replace(pageForRole(profile.role));
+      } catch (error) {
+        console.error(error);
+        message.className = "message";
+        message.textContent = friendlyError(error);
+        button.disabled = false;
+      }
+    });
+    document.getElementById("show-pw").addEventListener("change", (event) => {
+      form.elements.password.type = event.target.checked ? "text" : "password";
+    });
+
+    document.getElementById("forgot-btn").addEventListener("click", async () => {
+      const email = form.elements.email.value.trim();
+      if (!email) {
+        message.className = "message";
+        message.textContent = "Type your email above first, then press Forgot password.";
+        return;
+      }
+      message.className = "message ok";
+      message.textContent = "Sending...";
+      try {
+        await sendReset(email);
+        message.textContent = "If this email has an account, a reset link is on its way. Check your inbox and your spam folder.";
+      } catch (error) {
+        console.error(error);
+        message.className = "message";
+        message.textContent = friendlyError(error);
+      }
+    });
+  </script>
+</body>
+</html>
